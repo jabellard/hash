@@ -1,20 +1,26 @@
 //todo
 //1- const qualifier
+// static modifier ++
+// hfd memory leaks in 3 funcs
+// protype of add_to_ht: when data is replaced??? return value???
+// take care of resize funcs
+
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include "hash.h"
 
-#define MIN_BASE_SIZE 53
+static const ht_size_t MIN_BASE_SIZE = 53;
 
-#define PRIME_NUM1 523
+static const ht_size_t PRIME_NUM1 = 523;
 
-#define PRIME_NUM2 619
+static const ht_size_t PRIME_NUM2 = 619;
 
 static ht_item_t DELETED_ITEM = {NULL, NULL, NULL};
 
 ht_item_t *
-create_ht_item(char *k, void *v)
+create_ht_item(char *k, void *v) // ----1
 {
 	if (!k)
 	{
@@ -33,25 +39,37 @@ create_ht_item(char *k, void *v)
 } // end create_ht_item()
 
 int
-destroy_ht_item(ht_item_t *i)
+_destroy_ht_item(ht_item_t *i, data_dtor_func_t dtor) //-----------1
 {
-	if (!i || !i->container->data_dtor)
+	if (!i || !dtor)
 	{
 		return -1;
 	} // end if
 	
-	int res = i->container->data_dtor(i->v);
+	int res = dtor(i->v);
 	if (res == -1)
 	{
 		return -1;
 	} // end if
 	
+	sfree(i->k);
 	sfree(i);
 	return 0;
+} // end _destroy_ht_item()
+
+static int
+destroy_ht_item(ht_item_t *i) //----------1
+{
+	if (!i || !i->container)
+	{
+		return -1;
+	} // end if
+	
+	return _destroy_ht_item(i, i->container->data_dtor);
 } // end destroy_ht_item()
 
 ht_t *
-_create_ht(int bs, data_dtor_func_t dtor, prime_finder_func_t pf, hash_func_t hf)
+_create_ht(int bs, data_dtor_func_t dtor, prime_finder_func_t pf, hash_func_t hf) //------1
 {
 	if (!dtor)
 	{
@@ -87,6 +105,10 @@ _create_ht(int bs, data_dtor_func_t dtor, prime_finder_func_t pf, hash_func_t hf
 	ht->count = 0;
 	
 	ht->items = calloc(ht->size, sizeof(ht_item_t *));
+	if (!ht->items)
+	{
+		return NULL;
+	} // end if
 	
 	ht->data_dtor = dtor;
 	
@@ -103,7 +125,7 @@ _create_ht(int bs, data_dtor_func_t dtor, prime_finder_func_t pf, hash_func_t hf
 } // end _create_ht()
 
 ht_t *
-create_ht(data_dtor_func_t dtor)
+create_ht(data_dtor_func_t dtor) //--------1
 {
 	if (!dtor)
 	{
@@ -114,22 +136,25 @@ create_ht(data_dtor_func_t dtor)
 } // end create_ht()
 
 int
-destroy_ht(ht_t *ht)
+destroy_ht(ht_t *ht) //---------------------1
 {
 	if (!ht || !ht->items)
 	{
+		printf("Derr0\n");
 		return -1;
 	} // end if
 	
 	int i = 0;
+	ht_item_t *curr_item = NULL;
 	for (i; i < ht->size; i++)
 	{
-		ht_item_t *item = ht->items[i];
-		if (item != NULL || item != &DELETED_ITEM)
+		curr_item = ht->items[i];
+		if (curr_item != NULL && curr_item != &DELETED_ITEM)
 		{
-			int res = destroy_ht_item(item);
+			int res = destroy_ht_item(curr_item);
 			if (res == -1)
 			{
+				printf("Derr1\n");
 				return -1;
 			} // end if
 		} // end if
@@ -140,8 +165,8 @@ destroy_ht(ht_t *ht)
 	return 0;
 } // end destroy_ht()
 
-hash_func_data_t *
-create_hfd(const char *str, const ht_size_t ht_size, const int i)
+static hash_func_data_t *
+create_hfd(const char *str, const ht_size_t ht_size, const int i) //-------1
 {
 	if (!str)
 	{
@@ -160,8 +185,8 @@ create_hfd(const char *str, const ht_size_t ht_size, const int i)
 	return hfd;
 } // end create_hfd()
 
-int
-destroy_hfd(hash_func_data_t *hfd)
+static int
+destroy_hfd(hash_func_data_t *hfd) //--------------1
 {
 	if (!hfd)
 	{
@@ -173,8 +198,8 @@ destroy_hfd(hash_func_data_t *hfd)
 	return 0;
 } // end destroy_hfd()
 
-ht_size_t
-get_hash_code(const char *str, const unsigned long pn, const ht_size_t ht_size)
+static ht_size_t
+get_hash_code(const char *str, const unsigned long pn, const ht_size_t ht_size) //-----------1
 {
 	if (!str)
 	{
@@ -194,8 +219,8 @@ get_hash_code(const char *str, const unsigned long pn, const ht_size_t ht_size)
 	return (ht_size_t)hash_code;
 } // end get_hash_code()
 
-ht_size_t 
-get_ht_index(hash_func_data_t *hfd)
+static ht_size_t 
+get_ht_index(hash_func_data_t *hfd) //-----------1
 {
 	if (!hfd || !hfd->str)
 	{
@@ -217,7 +242,7 @@ get_ht_index(hash_func_data_t *hfd)
 } // end get_ht_index()
 
 int
-add_to_ht(ht_t *ht, ht_item_t *item, int flags)
+add_to_ht(ht_t *ht, ht_item_t *item, int flags) // -------1
 {
 	if (!ht || !ht->items || !ht->hash_func || !item)
 	{
@@ -231,7 +256,7 @@ add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 		if (res == -1)
 		{
 			return -1;
-		}
+		} // end if
 	} // end if
 	
 	hash_func_data_t *hfd = create_hfd(item->k, ht->size, 0);
@@ -240,14 +265,15 @@ add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 		return -1;
 	} // end if
 	
-	int index = ht->hash_func(hfd);
+	ht_size_t index = ht->hash_func(hfd);
 	if (index == -1)
 	{
 		return -1;
+		//goto f_del_hfd;
 	}// end if
 	
 	ht_item_t *curr_item = ht->items[index];
-	int i = 1;
+	ht_size_t i = 1;
 	while (curr_item != NULL && curr_item != &DELETED_ITEM)
 	{
 		if (strcmp(curr_item->k, item->k) == 0)
@@ -255,6 +281,7 @@ add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 			if (!flags)
 			{
 				return -1; 
+				//goto f_del_hfd;
 			} // end if
 			else
 			{
@@ -262,8 +289,10 @@ add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 				if (res == -1)
 				{
 					return -1;
+					//goto f_del_hfd;
 				} // end if
 				
+				item->container = ht;
 				ht->items[index] = item;
 				return 0;
 			} // end else
@@ -280,14 +309,15 @@ add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 		i++;	
 	} // end while
 	
-	ht->items[index] = curr_item;
+	item->container = ht;
+	ht->items[index] = item;
 	(ht->count)++;
 	return 0;
 } // end add_to_ht()
 
 
 void *
-search_ht(ht_t *ht, const char *k)
+search_ht(ht_t *ht, const char *k) //------------1
 {
 	if (!ht || !ht->items || !ht->hash_func || !k)
 	{
@@ -300,14 +330,14 @@ search_ht(ht_t *ht, const char *k)
 		return NULL;
 	} // end if
 	
-	int index = ht->hash_func(hfd);
+	ht_size_t index = ht->hash_func(hfd);
 	if (index == -1)
 	{
 		return NULL;
 	} // end if
 	
 	ht_item_t *curr_item = ht->items[index];
-	int i = 1;
+	ht_size_t i = 1;
 	while (curr_item != NULL && curr_item != &DELETED_ITEM)
 	{
 		if (strcmp(curr_item->k, k) == 0)
@@ -330,10 +360,11 @@ search_ht(ht_t *ht, const char *k)
 } // end search_ht()
 
 int
-delete_from_ht(ht_t *ht, const char *k)
+delete_from_ht(ht_t *ht, const char *k) //--------------1
 {
 	if (!ht || !ht->items || !ht->hash_func || !k)
 	{
+		printf("errrrr0\n");
 		return -1;
 	} // end if
 	
@@ -343,6 +374,7 @@ delete_from_ht(ht_t *ht, const char *k)
 		int res = resize_ht_down(ht);
 		if (res == -1)
 		{
+			printf("errrrr1\n");
 			return -1;
 		}
 	} // end if
@@ -350,24 +382,28 @@ delete_from_ht(ht_t *ht, const char *k)
 	hash_func_data_t *hfd = create_hfd(k, ht->size, 0);
 	if (!hfd)
 	{
+		printf("errrrr2\n");
 		return -1;
 	} // end if
 	
-	int index = ht->hash_func(hfd);
+	ht_size_t index = ht->hash_func(hfd);
 	if (index == -1)
 	{
+		printf("errrrr3\n");
 		return -1;
 	} // end if
 	
 	ht_item_t *curr_item = ht->items[index];
-	int i = 1;
+	ht_size_t i = 1;
 	while (curr_item != NULL && curr_item != &DELETED_ITEM)
 	{
 		if (strcmp(curr_item->k, k) == 0)
 		{
+			printf("in func: the val = %s\n", (const char *)curr_item->v);
 			int res = destroy_ht_item(curr_item);
 			if (res == -1)
 			{
+				printf("errrrr4\n");
 				return -1;
 			} // end if
 			
@@ -380,6 +416,7 @@ delete_from_ht(ht_t *ht, const char *k)
 		index = ht->hash_func(hfd);
 		if (index == -1)
 		{
+			printf("errrrr5\n");
 			return -1;
 		} // end if
 		
@@ -387,11 +424,12 @@ delete_from_ht(ht_t *ht, const char *k)
 		i++;	
 	} // end while
 	
+	printf("errrrr6\n");
 	return -1;
 } // end delete_from_ht()
 
-ht_size_t
-is_prime(ht_size_t x)
+static ht_size_t
+is_prime(ht_size_t x) //---------1
 {
 	if (x < 2)
 	{
@@ -403,7 +441,7 @@ is_prime(ht_size_t x)
 		return 1;
 	} // end if
 	
-	if (x % 2)
+	if (x % 2 == 0)
 	{
 		return 0;
 	} // end if
@@ -420,8 +458,8 @@ is_prime(ht_size_t x)
 	return 1;
 } // end is_prime()
 
-ht_size_t
-get_next_prime(ht_size_t x)
+static ht_size_t
+get_next_prime(ht_size_t x) //---------------1
 {
 	while (!is_prime(x))
 	{
@@ -431,7 +469,7 @@ get_next_prime(ht_size_t x)
 	return x;
 } // end get_next_prime()
 
-int 
+static int 
 resize_ht(ht_t *ht, ht_size_t new_bs)
 {
 	if (!ht || new_bs < MIN_BASE_SIZE)
@@ -486,7 +524,7 @@ resize_ht(ht_t *ht, ht_size_t new_bs)
 	}
 } // end resize_ht()
 
-int
+static int
 resize_ht_up(ht_t *ht)
 {
 	if (!ht || ht->base_size == 0)
@@ -506,7 +544,7 @@ resize_ht_up(ht_t *ht)
 	} // end else
 } // end resize_ht_up()
 
-int
+static int
 resize_ht_down(ht_t *ht)
 {
 	if (!ht || ht->base_size == 0)
@@ -526,10 +564,11 @@ resize_ht_down(ht_t *ht)
 	} // end else
 } // end resize_ht_down()
 
-static void safe_free(void **pp)
+void safe_free(void **pp)     //------------1
 {
 	if (pp != NULL && *pp != NULL)
 	{
+		printf("deleting\n");
 		free(*pp);
 		*pp = NULL;
 	} // end if
