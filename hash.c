@@ -1,6 +1,8 @@
 //todo
 //1- const qualifier
-
+#include <stdlib.h>
+#include <math.h>
+#include <string.h>
 #include "hash.h"
 
 #define MIN_BASE_SIZE 53
@@ -12,7 +14,7 @@
 static ht_item_t DELETED_ITEM = {NULL, NULL, NULL};
 
 ht_item_t *
-create_ht_item(const char *k, const void *v)
+create_ht_item(char *k, void *v)
 {
 	if (!k)
 	{
@@ -33,12 +35,12 @@ create_ht_item(const char *k, const void *v)
 int
 destroy_ht_item(ht_item_t *i)
 {
-	if (!i || !i->container->dtor)
+	if (!i || !i->container->data_dtor)
 	{
 		return -1;
 	} // end if
 	
-	int res = i->container_dtor(i->v);
+	int res = i->container->data_dtor(i->v);
 	if (res == -1)
 	{
 		return -1;
@@ -80,7 +82,7 @@ _create_ht(int bs, data_dtor_func_t dtor, prime_finder_func_t pf, hash_func_t hf
 		ht->prime_finder = pf;
 	} // end else
 	
-	ht->size = ht->pf(ht->base_size);
+	ht->size = ht->prime_finder(ht->base_size);
 	
 	ht->count = 0;
 	
@@ -94,7 +96,7 @@ _create_ht(int bs, data_dtor_func_t dtor, prime_finder_func_t pf, hash_func_t hf
 	} // end if
 	else
 	{
-		ht->hash_func = get_hf_index;
+		ht->hash_func = get_ht_index;
 	} // end else
 	
 	return ht;
@@ -123,7 +125,7 @@ destroy_ht(ht_t *ht)
 	for (i; i < ht->size; i++)
 	{
 		ht_item_t *item = ht->items[i];
-		if (item != NULL || item != DELETED_ITEM)
+		if (item != NULL || item != &DELETED_ITEM)
 		{
 			int res = destroy_ht_item(item);
 			if (res == -1)
@@ -166,7 +168,7 @@ destroy_hfd(hash_func_data_t *hfd)
 		return -1;
 	} // end if
 	
-	sfree(hdf->str);
+	sfree(hfd->str);
 	sfree(hfd);
 	return 0;
 } // end destroy_hfd()
@@ -232,7 +234,7 @@ add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 		}
 	} // end if
 	
-	hash_func_data_t *hfd = create_hfd(item->k, *ht->size, 0);
+	hash_func_data_t *hfd = create_hfd(item->k, ht->size, 0);
 	if (!hfd)
 	{
 		return -1;
@@ -240,9 +242,9 @@ add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 	
 	int index = ht->hash_func(hfd);
 	if (index == -1)
-	(
+	{
 		return -1;
-	) // end if
+	}// end if
 	
 	ht_item_t *curr_item = ht->items[index];
 	int i = 1;
@@ -274,12 +276,12 @@ add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 			return -1;
 		} // end if
 		
-		curr_item = ht->item[index];
+		curr_item = ht->items[index];
 		i++;	
 	} // end while
 	
 	ht->items[index] = curr_item;
-	(ht->count)++
+	(ht->count)++;
 	return 0;
 } // end add_to_ht()
 
@@ -300,9 +302,9 @@ search_ht(ht_t *ht, const char *k)
 	
 	int index = ht->hash_func(hfd);
 	if (index == -1)
-	(
+	{
 		return NULL;
-	) // end if
+	} // end if
 	
 	ht_item_t *curr_item = ht->items[index];
 	int i = 1;
@@ -317,10 +319,10 @@ search_ht(ht_t *ht, const char *k)
 		index = ht->hash_func(hfd);
 		if (index == -1)
 		{
-			return -1;
+			return NULL;
 		} // end if
 		
-		curr_item = ht->item[index];
+		curr_item = ht->items[index];
 		i++;	
 	} // end while
 	
@@ -345,7 +347,7 @@ delete_from_ht(ht_t *ht, const char *k)
 		}
 	} // end if
 	
-	hash_func_data_t *hfd = create_hfd(item->k, *ht->size, 0);
+	hash_func_data_t *hfd = create_hfd(k, ht->size, 0);
 	if (!hfd)
 	{
 		return -1;
@@ -353,9 +355,9 @@ delete_from_ht(ht_t *ht, const char *k)
 	
 	int index = ht->hash_func(hfd);
 	if (index == -1)
-	(
+	{
 		return -1;
-	) // end if
+	} // end if
 	
 	ht_item_t *curr_item = ht->items[index];
 	int i = 1;
@@ -375,13 +377,13 @@ delete_from_ht(ht_t *ht, const char *k)
 		} // end if
 		
 		hfd->i = i;
-		index = hash_func(hfd);
+		index = ht->hash_func(hfd);
 		if (index == -1)
 		{
 			return -1;
 		} // end if
 		
-		curr_item = ht->item[index];
+		curr_item = ht->items[index];
 		i++;	
 	} // end while
 	
@@ -446,10 +448,10 @@ resize_ht(ht_t *ht, ht_size_t new_bs)
 	int i = 0;
 	for (i; i < ht->size; i++)
 	{
-		ht_t *curr_item = ht->items[i];
+		ht_item_t *curr_item = ht->items[i];
 		if (curr_item != NULL && curr_item != &DELETED_ITEM)
 		{
-			int res = add_to_ht(new_ht, curr_item);
+			int res = add_to_ht(new_ht, curr_item, 0);
 			if (res == -1)
 			{
 				return -1;
@@ -459,15 +461,15 @@ resize_ht(ht_t *ht, ht_size_t new_bs)
 	
 	ht_size_t tmp_bs = ht->base_size;
 	ht->base_size = new_ht->base_size;
-	new_ht->base_size = temp_bs;
+	new_ht->base_size = tmp_bs;
 	
 	ht_size_t tmp_size = ht->size;
 	ht->size = new_ht->size;
-	new_ht->size = temp_size;
+	new_ht->size = tmp_size;
 	
 	ht_size_t tmp_count = ht->count;
 	ht->count = new_ht->count;
-	new_ht->count = temp_count;
+	new_ht->count = tmp_count;
 	
 	ht_item_t **tmp_items = ht->items;
 	ht->items = new_ht->items;
@@ -524,3 +526,11 @@ resize_ht_down(ht_t *ht)
 	} // end else
 } // end resize_ht_down()
 
+static void safe_free(void **pp)
+{
+	if (pp != NULL && *pp != NULL)
+	{
+		free(*pp);
+		*pp = NULL;
+	} // end if
+} // end safe_free()

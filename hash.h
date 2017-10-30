@@ -8,6 +8,8 @@ typedef struct _ht_item_t
 	struct _ht_t *container;
 }ht_item_t;
 
+typedef long ht_size_t;
+
 typedef struct _hash_func_data_t
 {
 	char *str;
@@ -19,9 +21,7 @@ typedef ht_size_t (*hash_func_t)(hash_func_data_t *);
 
 typedef int (*data_dtor_func_t)(void *);
 
-typedef ht_size_t (*find_finder_func_t)(ht_size_t);
-
-typedef long ht_size_t;
+typedef ht_size_t (*prime_finder_func_t)(ht_size_t);
 
 typedef struct _ht_t
 {
@@ -35,7 +35,7 @@ typedef struct _ht_t
 }ht_t;
 
 ht_item_t *
-create_ht_item(const char *k, const void *v);
+create_ht_item(char *k, void *v);
 
 int
 destroy_ht_item(ht_item_t *i);
@@ -84,5 +84,8 @@ resize_ht_up(ht_t *ht);
 
 int
 resize_ht_down(ht_t *ht);
+
+static void safe_free(void **pp);
+#define sfree(p) safe_free((void**)&(p))
 
 #endif // _HASH_H
