@@ -1,15 +1,24 @@
+//todo
+//1- const qualifier
+
 #include "hash.h"
 
 #define MIN_BASE_SIZE 53
 
-#define PRIME_NUM1
+#define PRIME_NUM1 523
 
-#define PRIME_NUM2
+#define PRIME_NUM2 619
 
 static ht_item_t DELETED_ITEM = {NULL, NULL, NULL};
+
 ht_item_t *
 create_ht_item(const char *k, const void *v)
 {
+	if (!k)
+	{
+		return NULL;
+	} // end if
+	
 	ht_item_t *i = malloc(sizeof(ht_item_t));
 	if (!i)
 	{
@@ -40,7 +49,7 @@ destroy_ht_item(ht_item_t *i)
 } // end destroy_ht_item()
 
 ht_t *
-_create_ht(data_dtor_func_t dtor, hash_func_t hf, const int bs)
+_create_ht(int bs, data_dtor_func_t dtor, prime_finder_func_t pf, hash_func_t hf)
 {
 	if (!dtor)
 	{
@@ -59,8 +68,19 @@ _create_ht(data_dtor_func_t dtor, hash_func_t hf, const int bs)
 	} // end if
 	else
 	{
-		ht->size = get_next_prime(ht->base_size);
+		ht->base_size = bs;
 	} // end else
+	
+	if (!pf)
+	{
+		ht->prime_finder = get_next_prime;
+	} // end if
+	else
+	{
+		ht->prime_finder = pf;
+	} // end else
+	
+	ht->size = ht->pf(ht->base_size);
 	
 	ht->count = 0;
 	
@@ -78,7 +98,6 @@ _create_ht(data_dtor_func_t dtor, hash_func_t hf, const int bs)
 	} // end else
 	
 	return ht;
-	
 } // end _create_ht()
 
 ht_t *
@@ -89,7 +108,7 @@ create_ht(data_dtor_func_t dtor)
 		return NULL;
 	} // end if
 	
-	return _create_ht(dtor, get_hf_index, MIN_BASE_SIZE);
+	return _create_ht(MIN_BASE_SIZE, dtor, NULL, NULL);
 } // end create_ht()
 
 int
@@ -120,7 +139,7 @@ destroy_ht(ht_t *ht)
 } // end destroy_ht()
 
 hash_func_data_t *
-create_hfd(const char *str, const size_t ht_size, const int i)
+create_hfd(const char *str, const ht_size_t ht_size, const int i)
 {
 	if (!str)
 	{
@@ -152,8 +171,8 @@ destroy_hfd(hash_func_data_t *hfd)
 	return 0;
 } // end destroy_hfd()
 
-size_t
-get_hash_code(const char *str, const unsigned long pn, const size_t ht_size)
+ht_size_t
+get_hash_code(const char *str, const unsigned long pn, const ht_size_t ht_size)
 {
 	if (!str)
 	{
@@ -170,24 +189,23 @@ get_hash_code(const char *str, const unsigned long pn, const size_t ht_size)
 		hash_code %= ht_size;
 	} // end for
 	
-	return (size_t)hash_code;
+	return (ht_size_t)hash_code;
 } // end get_hash_code()
 
-size_t /////////////////////////////return type cant be negative problem!!!!!!!
-get_ht_index(void *_hfd)
+ht_size_t 
+get_ht_index(hash_func_data_t *hfd)
 {
-	hash_func_data_t * hfd = (hash_func_data_t *)_hfd;
 	if (!hfd || !hfd->str)
 	{
 		return -1;
 	} // end if
 	
-	const size_t hash_code1 = get_hash_code(hfd->str, PRIME_NUM1, hfd->ht_size);
+	const ht_size_t hash_code1 = get_hash_code(hfd->str, PRIME_NUM1, hfd->ht_size);
 	if (hash_code1 == -1)
 	{
 		return -1;
 	} // end if
-	const size_t hash_code2 = get_hash_code(hfd->str, PRIME_NUM2, hfd->ht_size);
+	const ht_size_t hash_code2 = get_hash_code(hfd->str, PRIME_NUM2, hfd->ht_size);
 	if (hash_code2 == -1)
 	{
 		return -1;
@@ -197,18 +215,22 @@ get_ht_index(void *_hfd)
 } // end get_ht_index()
 
 int
-add_to_ht(ht_t **ht, ht_item_t *item, int flags)
+add_to_ht(ht_t *ht, ht_item_t *item, int flags)
 {
-	if (!ht || !item)
+	if (!ht || !ht->items || !ht->hash_func || !item)
 	{
 		return -1;
 	} // end if
 	
-	
-	// resize?????????????????????????????????????????
-	
-	// look at prototype
-	
+	ht_size_t load = ht->count * 100 / ht->size;
+	if (load > 70)
+	{
+		int res = resize_ht_up(ht);
+		if (res == -1)
+		{
+			return -1;
+		}
+	} // end if
 	
 	hash_func_data_t *hfd = create_hfd(item->k, *ht->size, 0);
 	if (!hfd)
@@ -216,7 +238,7 @@ add_to_ht(ht_t **ht, ht_item_t *item, int flags)
 		return -1;
 	} // end if
 	
-	int index = get_ht_index((void *)hfd);
+	int index = ht->hash_func(hfd);
 	if (index == -1)
 	(
 		return -1;
@@ -230,18 +252,23 @@ add_to_ht(ht_t **ht, ht_item_t *item, int flags)
 		{
 			if (!flags)
 			{
-				return -1; // SPECIAL VALUE????????
+				return -1; 
 			} // end if
 			else
 			{
-				destroy_ht_item(curr_item);
-				ht->items[index] = curr_item;
+				int res = destroy_ht_item(curr_item);
+				if (res == -1)
+				{
+					return -1;
+				} // end if
+				
+				ht->items[index] = item;
 				return 0;
 			} // end else
 		} // end if
 		
 		hfd->i = i;
-		index = get_ht_index((void *)hfd);
+		index = ht->hash_func(hfd);
 		if (index == -1)
 		{
 			return -1;
@@ -260,7 +287,7 @@ add_to_ht(ht_t **ht, ht_item_t *item, int flags)
 void *
 search_ht(ht_t *ht, const char *k)
 {
-	if (!ht || ht->count == 0 || !k)
+	if (!ht || !ht->items || !ht->hash_func || !k)
 	{
 		return NULL;
 	} // end if
@@ -271,7 +298,7 @@ search_ht(ht_t *ht, const char *k)
 		return NULL;
 	} // end if
 	
-	int index = get_ht_index((void *)hfd);
+	int index = ht->hash_func(hfd);
 	if (index == -1)
 	(
 		return NULL;
@@ -287,7 +314,7 @@ search_ht(ht_t *ht, const char *k)
 		} // end if
 		
 		hfd->i = i;
-		index = get_ht_index((void *)hfd);
+		index = ht->hash_func(hfd);
 		if (index == -1)
 		{
 			return -1;
@@ -303,9 +330,19 @@ search_ht(ht_t *ht, const char *k)
 int
 delete_from_ht(ht_t *ht, const char *k)
 {
-	if (!ht || ht->size == 0 || !k)
+	if (!ht || !ht->items || !ht->hash_func || !k)
 	{
 		return -1;
+	} // end if
+	
+	ht_size_t load = ht->count * 100 / ht->size;
+	if (load > 10)
+	{
+		int res = resize_ht_down(ht);
+		if (res == -1)
+		{
+			return -1;
+		}
 	} // end if
 	
 	hash_func_data_t *hfd = create_hfd(item->k, *ht->size, 0);
@@ -314,7 +351,7 @@ delete_from_ht(ht_t *ht, const char *k)
 		return -1;
 	} // end if
 	
-	int index = get_ht_index((void *)hfd);
+	int index = ht->hash_func(hfd);
 	if (index == -1)
 	(
 		return -1;
@@ -338,7 +375,7 @@ delete_from_ht(ht_t *ht, const char *k)
 		} // end if
 		
 		hfd->i = i;
-		index = get_ht_index((void *)hfd);
+		index = hash_func(hfd);
 		if (index == -1)
 		{
 			return -1;
@@ -351,8 +388,8 @@ delete_from_ht(ht_t *ht, const char *k)
 	return -1;
 } // end delete_from_ht()
 
-int
-is_prime(const int x)
+ht_size_t
+is_prime(ht_size_t x)
 {
 	if (x < 2)
 	{
@@ -369,7 +406,7 @@ is_prime(const int x)
 		return 0;
 	} // end if
 	
-	int i = 3;
+	ht_size_t i = 3;
 	for (i; i <= floor(sqrt((double)x)); i += 2)
 	{
 		if (x % i == 0)
@@ -381,24 +418,26 @@ is_prime(const int x)
 	return 1;
 } // end is_prime()
 
-int
-get_next_prime(int x)
+ht_size_t
+get_next_prime(ht_size_t x)
 {
 	while (!is_prime(x))
 	{
 		x++;
 	} // end while
+	
+	return x;
 } // end get_next_prime()
 
 int 
-resize_ht(ht_t *ht, size_t new_bs)
+resize_ht(ht_t *ht, ht_size_t new_bs)
 {
 	if (!ht || new_bs < MIN_BASE_SIZE)
 	{
 		return -1;
 	} // end if
 	
-	ht_t *new_ht = _create_ht(new_bs); // wrong
+	ht_t *new_ht = _create_ht(new_bs, ht->data_dtor, ht->prime_finder, ht->hash_func);
 	if (!new_ht)
 	{
 		return -1;
@@ -418,15 +457,15 @@ resize_ht(ht_t *ht, size_t new_bs)
 		} // end if
 	} // end for
 	
-	size_t tmp_bs = ht->base_size;
+	ht_size_t tmp_bs = ht->base_size;
 	ht->base_size = new_ht->base_size;
 	new_ht->base_size = temp_bs;
 	
-	size_t tmp_size = ht->size;
+	ht_size_t tmp_size = ht->size;
 	ht->size = new_ht->size;
 	new_ht->size = temp_size;
 	
-	size_t tmp_count = ht->count;
+	ht_size_t tmp_count = ht->count;
 	ht->count = new_ht->count;
 	new_ht->count = temp_count;
 	
@@ -453,8 +492,8 @@ resize_ht_up(ht_t *ht)
 		return -1;
 	} // end if
 	
-	size_t new_bs = ht->base_size * 2;
-	int res = resize(ht, new_bs);
+	ht_size_t new_bs = ht->base_size * 2;
+	int res = resize_ht(ht, new_bs);
 	if (res == -1)
 	{
 		return -1;
@@ -473,8 +512,8 @@ resize_ht_down(ht_t *ht)
 		return -1;
 	} // end if
 	
-	size_t new_bs = ht->base_size / 2;
-	int res = resize(ht, new_bs);
+	ht_size_t new_bs = ht->base_size / 2;
+	int res = resize_ht(ht, new_bs);
 	if (res == -1)
 	{
 		return -1;
