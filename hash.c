@@ -1,9 +1,10 @@
 //todo
 //1- const qualifier
-// static modifier ++
+// static modifier for safe_free()
 // hfd memory leaks in 3 funcs
 // protype of add_to_ht: when data is replaced??? return value???
 // take care of resize funcs
+// run second test
 
 #include <stdlib.h>
 #include <stdio.h>
