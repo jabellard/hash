@@ -53,13 +53,13 @@ int
 destroy_ht(ht_t *ht);
 
 static hash_func_data_t *
-create_hfd(const char *str, const ht_size_t ht_size, const int i);
+create_hfd(char *str, ht_size_t ht_size, int i);
 
 static int
 destroy_hfd(hash_func_data_t *hfd);
 
 static ht_size_t
-get_hash_code(const char *str, const unsigned long pn, const ht_size_t ht_size);
+get_hash_code(char *str, unsigned long pn, ht_size_t ht_size);
 
 static ht_size_t
 get_ht_index(hash_func_data_t *hfd);
@@ -68,10 +68,10 @@ int
 add_to_ht(ht_t *ht, ht_item_t *item, int flags);
 
 void *
-search_ht(ht_t *ht, const char *k);
+search_ht(ht_t *ht, char *k);
 
 int
-delete_from_ht(ht_t *ht, const char *k);
+delete_from_ht(ht_t *ht, char *k);
 
 static ht_size_t
 is_prime(ht_size_t x);
@@ -88,7 +88,7 @@ resize_ht_up(ht_t *ht);
 static int
 resize_ht_down(ht_t *ht);
 
-void safe_free(void **pp);
+static void safe_free(void **pp);
 #define sfree(p) safe_free((void**)&(p))
 
 #endif // _HASH_H
