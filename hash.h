@@ -19,7 +19,7 @@ typedef struct _hash_func_data_t
 
 typedef ht_size_t (*hash_func_t)(hash_func_data_t *);
 
-typedef int (*data_dtor_func_t)(void *);
+typedef void (*data_dtor_func_t)(void *);
 
 typedef ht_size_t (*prime_finder_func_t)(ht_size_t);
 

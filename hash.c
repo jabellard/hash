@@ -39,11 +39,7 @@ _destroy_ht_item(ht_item_t *i, data_dtor_func_t dtor)
 		return -1;
 	} // end if
 	
-	int res = dtor(i->v);
-	if (res == -1)
-	{
-		return -1;
-	} // end if
+	dtor(i->v);
 	
 	sfree(i->k);
 	sfree(i);
